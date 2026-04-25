@@ -3,7 +3,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link"; // <-- ADICIONE ESTA LINHA EXATAMENTE AQUI
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -12,37 +12,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icons } from "@/components/shared/icons";
+import { login } from "@/lib/actions/login"; // Importamos a action real
 
 export function LoginForm() {
   const [isLoading, setIsLoading] = React.useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginInput>({
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
   });
 
   async function onSubmit(data: LoginInput) {
-    setIsLoading(true);
-    
-    try {
-      // Por enquanto apenas logamos, no próximo passo integraremos o signIn()
-      console.log("Tentativa de login:", data);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast.info("Lógica de autenticação sendo integrada...");
-    } catch (error) {
-      toast.error("Erro ao realizar login.");
-    } finally {
-      setIsLoading(false);
-    }
-  }
+	  setIsLoading(true);
+	  
+	  // 1. Chamamos a action
+	  const response = await login(data);
+
+	  // 2. Se houver um erro real (como senha errada), mostramos o toast
+	  if (response?.error) {
+		setIsLoading(false); // Só paramos o loading se der erro
+		toast.error(response.error);
+		return;
+	  }
+
+	  // 3. Se não houver erro, NÃO fazemos nada. 
+	  // A Server Action vai nos "chutar" para o dashboard automaticamente.
+	  toast.success("Autenticando...");
+	}
 
   return (
     <div className="grid gap-6">
