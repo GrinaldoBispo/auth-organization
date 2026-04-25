@@ -1,5 +1,7 @@
 // src/lib/validations/auth.ts
 
+// SenhaSuperSegura@123
+
 import * as z from "zod";
 
 export const loginSchema = z.object({
