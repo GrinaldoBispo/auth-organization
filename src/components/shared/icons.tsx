@@ -1,5 +1,4 @@
 // src/components/shared/icons.tsx
-//src/components/shared/icons.tsx
 
 import { 
   Loader2, 
@@ -8,9 +7,12 @@ import {
   Globe, 
   Command,
   Search,
-  type Icon as LucideIcon
+  // Importamos LucideIcon como tipo explicitamente se disponível, 
+  // ou definimos um tipo genérico compatível.
+  type LucideIcon 
 } from "lucide-react";
 
+// Definimos o tipo Icon de forma segura para o TypeScript
 export type Icon = LucideIcon;
 
 export const Icons = {
@@ -18,7 +20,8 @@ export const Icons = {
   mail: Mail,
   password: Lock,
   logo: Command,
-  google: Search, // Ícone genérico para não quebrar o build
+  google: Search,
+  // Tipagem explícita para o componente SVG do GitHub
   gitHub: (props: React.SVGProps<SVGSVGElement>) => (
     <svg
       aria-hidden="true"

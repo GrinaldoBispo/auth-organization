@@ -1,16 +1,14 @@
 // src/auth.config.ts
 
+import Google from "next-auth/providers/google";
 import type { NextAuthConfig } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
 
 export default {
   providers: [
-    Credentials({
-      // No Proxy/Edge, deixamos apenas os campos, sem a lógica de authorize
-      credentials: {
-        email: { type: "email" },
-        password: { type: "password" },
-      },
+    Google({
+      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      allowDangerousEmailAccountLinking: true,
     }),
   ],
 } satisfies NextAuthConfig;

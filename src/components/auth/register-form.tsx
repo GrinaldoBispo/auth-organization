@@ -2,59 +2,146 @@
 
 "use client";
 
-import * as React from "react";
+import * as z from "zod";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { registerSchema } from "@/lib/validations/auth";
+import { register } from "@/lib/actions/register";
 import { toast } from "sonner";
-import { loginSchema, type LoginInput } from "@/lib/validations/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Icons } from "@/components/shared/icons";
-import { registerUser } from "@/lib/actions/register"; // Importamos a action
 import { useRouter } from "next/navigation";
 
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Icons } from "@/components/shared/icons";
+
 export function RegisterForm() {
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
+  const form = useForm<z.infer<typeof registerSchema>>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: "",
+      username: "",
+      email: "",
+      password: "",
+    },
   });
 
-  async function onSubmit(data: LoginInput) {
+  async function onSubmit(values: z.infer<typeof registerSchema>) {
     setIsLoading(true);
-    const result = await registerUser(data);
 
-    if (result.error) {
+    const result = await register(values);
+
+    if (result?.error) {
+      setIsLoading(false);
       toast.error(result.error);
-    } else {
-      toast.success("Conta criada! Você já pode fazer login.");
-      router.push("/login");
+      return;
     }
-    setIsLoading(false);
+
+    toast.success("Conta criada! Redirecionando...");
+    router.push("/login");
   }
 
   return (
-    <div className="grid gap-6">
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="email">E-mail</Label>
-            <Input id="email" placeholder="nome@exemplo.com" type="email" disabled={isLoading} {...register("email")} />
-            {errors.email && <p className="text-xs text-red-500">{errors.email.message}</p>}
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="password">Senha</Label>
-            <Input id="password" type="password" placeholder="••••••••" disabled={isLoading} {...register("password")} />
-            {errors.password && <p className="text-xs text-red-500">{errors.password.message}</p>}
-          </div>
-          <Button disabled={isLoading} className="w-full">
-            {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
-            Criar conta gratuita
-          </Button>
-        </div>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* NOME COMPLETO */}
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nome Completo</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  placeholder="Seu nome aqui"
+                  disabled={isLoading}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* USERNAME */}
+        <FormField
+          control={form.control}
+          name="username"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nome de Usuário (@)</FormLabel>
+              <FormControl>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-zinc-500 text-sm">@</span>
+                  <Input
+                    {...field}
+                    placeholder="usuario_unico"
+                    className="pl-7"
+                    disabled={isLoading}
+                  />
+                </div>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* EMAIL */}
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>E-mail</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  type="email"
+                  placeholder="exemplo@email.com"
+                  disabled={isLoading}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* SENHA */}
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Senha</FormLabel>
+              <FormControl>
+                <Input
+                  {...field}
+                  type="password"
+                  placeholder="******"
+                  disabled={isLoading}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
+          Criar conta
+        </Button>
       </form>
-    </div>
+    </Form>
   );
 }

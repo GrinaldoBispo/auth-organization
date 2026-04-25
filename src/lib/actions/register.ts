@@ -2,26 +2,39 @@
 
 "use server";
 
-import { hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { loginSchema } from "@/lib/validations/auth";
+import { registerSchema, type RegisterInput } from "@/lib/validations/auth";
+import bcrypt from "bcryptjs";
 
-export async function registerUser(values: any) {
-  const { email, password } = values;
-  const hashedPassword = await hash(password, 10);
+export async function register(values: RegisterInput) {
+  const validatedFields = registerSchema.safeParse(values);
 
-  try {
-    await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-      },
-    });
-    return { success: true };
-  } catch (error: any) {
-    if (error.code === 'P2002') {
-      return { error: "Este e-mail já está cadastrado." };
-    }
-    return { error: "Erro ao criar usuário." };
+  if (!validatedFields.success) {
+    return { error: "Campos inválidos!" };
   }
+
+  const { email, password, name, username } = validatedFields.data;
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // Verificar se o email ou username já existem
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      OR: [{ email }, { username }],
+    },
+  });
+
+  if (existingUser) {
+    return { error: "E-mail ou nome de utilizador já em uso!" };
+  }
+
+  await prisma.user.create({
+    data: {
+      name,
+      username,
+      email,
+      password: hashedPassword,
+    },
+  });
+
+  return { success: "Conta criada com sucesso!" };
 }
