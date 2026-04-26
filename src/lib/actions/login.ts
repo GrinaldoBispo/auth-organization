@@ -3,11 +3,11 @@
 "use server";
 
 import { signIn } from "@/auth";
-import { loginSchema, type LoginInput } from "@/lib/validations/auth";
+import { loginSchema, type LoginValues } from "@/lib/validations/auth";
 import { AuthError } from "next-auth";
 import { redirect } from "next/navigation"; // Usaremos o redirect padrão
 
-export async function login(values: LoginInput) {
+export async function login(values: LoginValues) {
   const validatedFields = loginSchema.safeParse(values);
 
   if (!validatedFields.success) {

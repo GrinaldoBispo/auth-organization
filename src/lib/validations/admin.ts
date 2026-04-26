@@ -3,15 +3,15 @@
 import * as z from "zod";
 
 export const emailConfigSchema = z.object({
-  smtpHost: z.string().min(1, "Host é obrigatório"),
-  smtpPort: z.string().min(1, "Porta é obrigatória"),
-  smtpUser: z.string().min(1, "Usuário é obrigatório"),
-  smtpPass: z.string().optional(),
-  useSecure: z.boolean().default(false),
-  fromName: z.string().min(1, "Nome do remetente é obrigatório"),
-  fromEmail: z.string().email("E-mail do remetente inválido"),
-  adminNotifyEmail: z.string().email("E-mail de notificação inválido"),
-  emailTemplate: z.string().min(10, "O layout do e-mail é obrigatório"), // O campo para o HTML
+  smtpHost: z.string().min(1, "Obrigatório"),
+  smtpPort: z.string().min(1, "Obrigatório"),
+  smtpUser: z.string().min(1, "Obrigatório"),
+  smtpPass: z.string().optional().or(z.literal("")), // Permite opcional ou string vazia
+  useSecure: z.boolean(), // Remova o default aqui para forçar a obrigatoriedade no formulário
+  fromName: z.string().min(1, "Obrigatório"),
+  fromEmail: z.string().email("E-mail inválido"),
+  adminNotifyEmail: z.string().email("E-mail inválido"),
+  emailTemplate: z.string().min(1, "Obrigatório"),
 });
 
 export type EmailConfigValues = z.infer<typeof emailConfigSchema>;

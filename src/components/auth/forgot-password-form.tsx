@@ -4,7 +4,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { forgotPasswordSchema, ForgotPasswordInput } from "@/lib/validations/auth";
+import { forgotPasswordSchema, ForgotPasswordValues } from "@/lib/validations/auth";
 import { useState } from "react";
 import { forgotPasswordAction } from "@/lib/actions/forgot-password";
 import { toast } from "sonner";
@@ -24,14 +24,14 @@ import { Button } from "@/components/ui/button";
 export function ForgotPasswordForm() {
   const [isPending, setIsPending] = useState(false);
 
-  const form = useForm<ForgotPasswordInput>({
+  const form = useForm<ForgotPasswordValues>({
     resolver: zodResolver(forgotPasswordSchema),
     defaultValues: {
       email: "",
     },
   });
 
-  async function onSubmit(values: ForgotPasswordInput) {
+  async function onSubmit(values: ForgotPasswordValues) {
     setIsPending(true);
     
     // Criamos um FormData para enviar para a Server Action

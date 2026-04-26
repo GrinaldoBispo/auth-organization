@@ -28,7 +28,7 @@ export async function forgotPasswordAction(formData: FormData) {
     // 2. Disparo REAL do e-mail usando os dados do Supabase + Nodemailer
     // Passamos o e-mail, o token gerado e o nome do usuário para o template
     await sendPasswordResetEmail(
-      user.email,
+      user.email!,
       resetToken.token,
       user.name || "Usuário"
     );
