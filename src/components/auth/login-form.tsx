@@ -2,14 +2,15 @@
 
 "use client";
 
-import * as z from "zod";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { loginSchema } from "@/lib/validations/auth";
-import { login } from "@/lib/actions/login";
+import { loginSchema, LoginValues } from "@/lib/validations/auth";
+import { useState, useTransition } from "react";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
-import { signIn } from "next-auth/react"; // Importação necessária para o Google
+import { Loader2 } from "lucide-react";
 
 import {
   Form,
@@ -21,12 +22,15 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/shared/icons";
+import { Separator } from "@/components/ui/separator";
+import { Social } from "./social";
 
 export function LoginForm() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const { update } = useSession();
 
-  const form = useForm<z.infer<typeof loginSchema>>({
+  const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       email: "",
@@ -34,32 +38,48 @@ export function LoginForm() {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof loginSchema>) {
-    setIsLoading(true);
-    const result = await login(values);
+  const onSubmit = (values: LoginValues) => {
+    startTransition(async () => {
+      try {
+        const result = await signIn("credentials", {
+          email: values.email,
+          password: values.password,
+          redirect: false, // Mantemos false para controlar o destino via Role
+        });
 
-    if (result?.error) {
-      setIsLoading(false);
-      toast.error(result.error);
-      return;
-    }
-    toast.success("Autenticando...");
-  }
+        if (result?.error) {
+          // Tratamento de erro específico para credenciais
+          if (result.error === "CredentialsSignin") {
+            toast.error("E-mail ou senha incorretos.");
+          } else {
+            toast.error("Ocorreu um erro ao tentar entrar.");
+          }
+          return;
+        }
 
-  // Função para lidar com o Login do Google
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    try {
-      await signIn("google", { callbackUrl: "/dashboard" });
-    } catch (error) {
-      toast.error("Erro ao conectar com o Google");
-    } finally {
-      setIsLoading(false);
-    }
+        toast.success("Login realizado com sucesso!");
+
+        // 1. Atualizamos a sessão para garantir que temos a Role do banco
+        const session = await update();
+
+        // 2. Redirecionamento Inteligente
+        // Se for ADMIN -> vai para as configurações de e-mail
+        // Se for USER -> vai para o dashboard principal
+        if (session?.user?.role === "ADMIN") {
+          router.push("/email");
+        } else {
+          router.push("/dashboard");
+        }
+
+        router.refresh();
+      } catch (error) {
+        toast.error("Erro inesperado. Tente novamente.");
+      }
+    });
   };
 
   return (
-    <div className="grid gap-6">
+    <div className="space-y-6">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
@@ -67,13 +87,12 @@ export function LoginForm() {
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>E-mail ou Usuário</FormLabel>
+                <FormLabel>E-mail ou Username</FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
-                    type="text"
-                    placeholder="seu@email.com ou usuario"
-                    disabled={isLoading}
+                  <Input 
+                    {...field} 
+                    disabled={isPending} 
+                    placeholder="exemplo@gmail.com" 
                   />
                 </FormControl>
                 <FormMessage />
@@ -86,13 +105,21 @@ export function LoginForm() {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Senha</FormLabel>
+                <div className="flex items-center justify-between">
+                  <FormLabel>Senha</FormLabel>
+                  <Link 
+                    href="/forgot-password" 
+                    className="text-xs text-blue-600 hover:underline transition-all"
+                  >
+                    Esqueceu a senha?
+                  </Link>
+                </div>
                 <FormControl>
-                  <Input
-                    {...field}
-                    type="password"
-                    placeholder="******"
-                    disabled={isLoading}
+                  <Input 
+                    {...field} 
+                    disabled={isPending} 
+                    type="password" 
+                    placeholder="******" 
                   />
                 </FormControl>
                 <FormMessage />
@@ -100,40 +127,29 @@ export function LoginForm() {
             )}
           />
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
-            Entrar
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Autenticando...
+              </>
+            ) : (
+              "Entrar"
+            )}
           </Button>
         </form>
       </Form>
 
       {/* Divisor Visual */}
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">
-            Ou continue com
-          </span>
-        </div>
+      <div className="relative flex items-center justify-center py-2">
+        <Separator className="absolute w-full border-zinc-200" />
+        <span className="relative bg-white px-2 text-[10px] text-zinc-500 uppercase tracking-wider">
+          Ou continue com
+        </span>
       </div>
 
-      {/* Botão do Google */}
-      <Button
-        variant="outline"
-        type="button"
-        disabled={isLoading}
-        onClick={handleGoogleLogin}
-        className="w-full"
-      >
-        {isLoading ? (
-          <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Icons.google className="mr-2 h-4 w-4" />
-        )}
-        Entrar com Google
-      </Button>
+      {/* Botão Social (Google) */}
+      <Social />
     </div>
   );
 }

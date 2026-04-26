@@ -1,25 +1,24 @@
 // src/auth.ts
 
 import NextAuth from "next-auth";
-import authConfig from "./auth.config";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
-import { compare } from "bcryptjs";
-import { loginSchema } from "@/lib/validations/auth";
+import authConfig from "./auth.config";
 import Credentials from "next-auth/providers/credentials";
+import { loginSchema } from "@/lib/validations/auth";
+import { compare } from "bcryptjs";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  allowDangerousEmailAccountLinking: true,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",
   },
-  // Espalhamos o config (que tem o Google)
+  // PERMISSÃO 2: Autoriza o Adapter a unir as contas no banco de dados
+  allowDangerousEmailAccountLinking: true,
   ...authConfig,
-  // E adicionamos o Credentials completo apenas aqui
   providers: [
-    ...authConfig.providers, // Mantém o Google
+    ...authConfig.providers,
     Credentials({
       async authorize(credentials) {
         const validatedFields = loginSchema.safeParse(credentials);
@@ -46,24 +45,75 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
+	events: {
+		async createUser({ user }) {
+		  // CENÁRIO 2: Usuário NOVO vindo do Google
+		  // Só gera username se ele realmente não tiver um (o que é o caso de novos users Google)
+		  if (!user.username && user.email) {
+			const userNamePart = user.email.split("@")[0].toLowerCase();
+			const randomId = Math.floor(100 + Math.random() * 900);
+			const generatedUsername = `${userNamePart}${randomId}`;
+
+			await prisma.user.update({
+			  where: { id: user.id },
+			  data: { 
+				username: generatedUsername,
+				emailVerified: new Date(), // Novos usuários Google já nascem verificados
+			  },
+			});
+		  }
+		},
+	  },
+	  callbacks: {
+		async signIn({ user, account, profile }) {
+		  if (account?.provider === "google" && user.email) {
+			const existingUser = await prisma.user.findUnique({
+			  where: { email: user.email },
+			});
+
+			// CENÁRIO 1: Usuário já existia (Vínculo)
+			if (existingUser) {
+			  await prisma.user.update({
+				where: { id: existingUser.id },
+				data: {
+				  // SÓ atualiza o emailVerified se estiver nulo
+				  emailVerified: existingUser.emailVerified || new Date(),
+				  // SÓ atualiza a imagem se o usuário não tiver uma
+				  image: existingUser.image || profile?.picture || user.image || null,
+				  // IMPORTANTE: Não incluímos o 'username' aqui para NÃO sobrescrever o seu!
+				},
+			  });
+			}
+		  }
+		  return true;
+		},
+
     async session({ session, token }) {
+      if (token.sub && session.user) {
+        session.user.id = token.sub;
+      }
+      
       if (session.user) {
-        session.user.id = token.sub!;
-        session.user.name = token.name;
         // @ts-ignore
         session.user.username = token.username;
-        session.user.image = token.picture; // Aqui ele pega a URL da foto do token
+        session.user.image = token.picture;
+        // @ts-ignore
+        session.user.role = token.role; // <-- ADICIONE ISSO (ROLE)
       }
+      
       return session;
     },
-    async jwt({ token, user, account, profile }) {
-      // No primeiro login, o 'profile' contém a foto do Google
-      if (profile) {
-        token.picture = profile.picture;
+
+    async jwt({ token, user, trigger, session }) {
+      if (trigger === "update") {
+        return { ...token, ...session.user };
       }
 
-      if (!token.sub) return token;
+      // Se for o momento do login, o 'user' existe
+      if (user) {
+        // @ts-ignore
+        token.role = user.role;
+      }
 
       const existingUser = await prisma.user.findUnique({
         where: { id: token.sub },
@@ -72,9 +122,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (!existingUser) return token;
 
       token.name = existingUser.name;
+      // @ts-ignore
       token.username = existingUser.username;
-      // Se o banco tiver a imagem, usamos a do banco
-      token.picture = existingUser.image; 
+      token.picture = existingUser.image;
+      // @ts-ignore
+      token.role = existingUser.role; // <-- ADICIONE ISSO (Garante que o token tenha a role atualizada)
       
       return token;
     }

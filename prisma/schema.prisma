@@ -2,13 +2,17 @@
 
 generator client {
   provider        = "prisma-client-js"
-  // O nome correto agora é driverAdapters (ou remova se o build reclamar, pois já é padrão)
   previewFeatures = ["driverAdapters"] 
 }
 
 datasource db {
   provider = "postgresql"
-  // Remova a linha 'url' daqui!
+  // No Prisma 7, a URL é definida apenas no prisma.config.ts
+}
+
+enum UserRole {
+  ADMIN
+  USER
 }
 
 model User {
@@ -19,6 +23,7 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?   
+  role          UserRole  @default(USER) // Adicionado para controle de acesso
   accounts      Account[] 
   
   createdAt     DateTime  @default(now())
@@ -45,4 +50,27 @@ model Account {
 
   @@unique([provider, providerAccountId])
   @@map("accounts")
+}
+
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+
+  @@unique([email, token])
+}
+
+model SystemSettings {
+  id                String   @id @default("system_config")
+  smtpHost          String
+  smtpPort          String
+  smtpUser          String
+  smtpPass          String?   // Agora opcional para permitir manter a atual
+  useSecure         Boolean  @default(false)
+  fromName          String   @default("Sistema")
+  fromEmail         String
+  adminNotifyEmail  String
+  emailTemplate     String   @db.Text
+  updatedAt         DateTime @updatedAt
 }

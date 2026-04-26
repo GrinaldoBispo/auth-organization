@@ -2,14 +2,13 @@
 
 "use client";
 
-import * as z from "zod";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { registerSchema } from "@/lib/validations/auth";
-import { register } from "@/lib/actions/register";
-import { toast } from "sonner";
+import { registerSchema, RegisterValues } from "@/lib/validations/auth"; // Ajustado para RegisterValues
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 import {
   Form,
@@ -21,13 +20,15 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Icons } from "@/components/shared/icons";
+
+// IMPORTAÇÃO DA ACTION
+import { registerAction } from "@/lib/actions/register"; 
 
 export function RegisterForm() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const form = useForm<z.infer<typeof registerSchema>>({
+  const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
       name: "",
@@ -37,25 +38,22 @@ export function RegisterForm() {
     },
   });
 
-  async function onSubmit(values: z.infer<typeof registerSchema>) {
-    setIsLoading(true);
-
-    const result = await register(values);
-
-    if (result?.error) {
-      setIsLoading(false);
-      toast.error(result.error);
-      return;
-    }
-
-    toast.success("Conta criada! Redirecionando...");
-    router.push("/login");
+  function onSubmit(values: RegisterValues) {
+    startTransition(async () => {
+      const result = await registerAction(values);
+      
+      if (result?.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Conta criada! Redirecionando para o login...");
+        router.push("/login");
+      }
+    });
   }
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        {/* NOME COMPLETO */}
         <FormField
           control={form.control}
           name="name"
@@ -63,41 +61,27 @@ export function RegisterForm() {
             <FormItem>
               <FormLabel>Nome Completo</FormLabel>
               <FormControl>
-                <Input
-                  {...field}
-                  placeholder="Seu nome aqui"
-                  disabled={isLoading}
-                />
+                <Input {...field} disabled={isPending} placeholder="Grinaldo Bispo" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        {/* USERNAME */}
         <FormField
           control={form.control}
           name="username"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Nome de Usuário (@)</FormLabel>
+              <FormLabel>Nome de utilizador (@)</FormLabel>
               <FormControl>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-zinc-500 text-sm">@</span>
-                  <Input
-                    {...field}
-                    placeholder="usuario_unico"
-                    className="pl-7"
-                    disabled={isLoading}
-                  />
-                </div>
+                <Input {...field} disabled={isPending} placeholder="grinaldo_pro" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        {/* EMAIL */}
         <FormField
           control={form.control}
           name="email"
@@ -105,41 +89,36 @@ export function RegisterForm() {
             <FormItem>
               <FormLabel>E-mail</FormLabel>
               <FormControl>
-                <Input
-                  {...field}
-                  type="email"
-                  placeholder="exemplo@email.com"
-                  disabled={isLoading}
-                />
+                <Input {...field} disabled={isPending} type="email" placeholder="exemplo@gmail.com" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        {/* SENHA */}
         <FormField
           control={form.control}
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Senha</FormLabel>
+              <FormLabel>Palavra-passe</FormLabel>
               <FormControl>
-                <Input
-                  {...field}
-                  type="password"
-                  placeholder="******"
-                  disabled={isLoading}
-                />
+                <Input {...field} disabled={isPending} type="password" placeholder="Mínimo 6 caracteres" />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
 
-        <Button type="submit" className="w-full" disabled={isLoading}>
-          {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
-          Criar conta
+        <Button type="submit" className="w-full h-11 font-semibold" disabled={isPending}>
+          {isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Criando conta...
+            </>
+          ) : (
+            "Registar"
+          )}
         </Button>
       </form>
     </Form>
