@@ -66,7 +66,7 @@ export function LoginForm() {
         // Se for ADMIN -> vai para as configurações de e-mail
         // Se for USER -> vai para o dashboard principal
         if (session?.user?.role === "ADMIN") {
-          router.push("/admin");
+          router.push("/onboarding");
         } else {
           router.push("/dashboard");
         }

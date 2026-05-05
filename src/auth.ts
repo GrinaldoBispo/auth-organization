@@ -15,7 +15,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
     error: "/error",
   },
-  // O espalhamento do authConfig deve vir antes das customizações se você quiser sobrescrever algo
   ...authConfig,
   providers: [
     ...authConfig.providers,
@@ -26,6 +25,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (validatedFields.success) {
           const { email, password } = validatedFields.data;
 
+          // Busca por email ou username (conforme seu schema)
           const user = await prisma.user.findFirst({
             where: {
               OR: [
@@ -39,6 +39,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
           const passwordsMatch = await compare(password, user.password);
 
+          // Retornamos o objeto user para popular o JWT inicial
           if (passwordsMatch) return user;
         }
         return null;
@@ -46,7 +47,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   events: {
-    async createUser({ user }: { user: any }) { // Adicionado : { user: any }
+    async createUser({ user }: { user: any }) {
+      // Autogeração de username para novos usuários (ex: Google)
       if (!user.username && user.email) {
         const userNamePart = user.email.split("@")[0].toLowerCase();
         const randomId = Math.floor(100 + Math.random() * 900);
@@ -64,7 +66,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async signIn({ user, account, profile }) {
-      // Autoriza o login
       if (account?.provider === "google" && user.email) {
         const existingUser = await prisma.user.findUnique({
           where: { email: user.email },
@@ -83,46 +84,51 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return true;
     },
 
+    async jwt({ token, user, trigger, session }) {
+  if (trigger === "update" && session?.user) {
+    return { ...token, ...session.user };
+  }
+
+  // No login inicial, o objeto 'user' vem do authorize() ou do provider
+  if (user) {
+    token.role = (user as any).role;
+    token.orgId = (user as any).orgId;
+    token.username = (user as any).username;
+    return token; // Retorna imediatamente no login
+  }
+
+  // Só buscamos no banco se o token ainda não tiver as informações essenciais
+  if (!token.role || token.orgId === undefined) {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: token.sub },
+      select: { role: true, orgId: true, username: true, image: true, name: true }
+    });
+
+    if (dbUser) {
+      token.role = dbUser.role;
+      token.orgId = dbUser.orgId;
+      token.username = dbUser.username;
+    }
+  }
+  
+  return token;
+},
+
     async session({ session, token }) {
-      if (token.sub && session.user) {
-        session.user.id = token.sub;
-      }
-      
       if (session.user) {
-        // @ts-ignore
+        if (token.sub) session.user.id = token.sub;
+        
+        // Repassa os dados do Token (JWT) para a Sessão (Acessível no Front)
+        // @ts-ignore - Evita erros de tipagem rápida
         session.user.username = token.username;
-        session.user.image = token.picture;
+        session.user.image = token.picture as string;
         // @ts-ignore
         session.user.role = token.role;
+        // @ts-ignore
+        session.user.orgId = token.orgId;
       }
       
       return session;
     },
-
-    async jwt({ token, user, trigger, session }) {
-      if (trigger === "update") {
-        return { ...token, ...session.user };
-      }
-
-      if (user) {
-        // @ts-ignore
-        token.role = user.role;
-      }
-
-      const existingUser = await prisma.user.findUnique({
-        where: { id: token.sub },
-      });
-
-      if (!existingUser) return token;
-
-      token.name = existingUser.name;
-      // @ts-ignore
-      token.username = existingUser.username;
-      token.picture = existingUser.image;
-      // @ts-ignore
-      token.role = existingUser.role;
-      
-      return token;
-    }
   }
 });

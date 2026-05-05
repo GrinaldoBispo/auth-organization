@@ -38,14 +38,14 @@ export async function registerAction(values: RegisterValues) {
     // 4. Criptografar a senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 5. Criar o usuário (padrão ROLE: USER)
+    // 5. Criar o usuário (padrão ROLE: STAFF)
     await prisma.user.create({
       data: {
         name,
         username,
         email,
         password: hashedPassword,
-        role: "USER" // Todo registro novo começa como usuário comum
+        role: "STAFF" // Todo registro novo começa como usuário comum
       },
     });
 

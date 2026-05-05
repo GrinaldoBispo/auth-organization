@@ -1,6 +1,5 @@
-// SenhaSuperSegura@123
-
 // src/lib/validations/auth.ts
+
 import * as z from "zod";
 
 export const loginSchema = z.object({
@@ -8,6 +7,8 @@ export const loginSchema = z.object({
   email: z.string().min(1, "E-mail ou usuário é obrigatório"),
   password: z.string().min(1, "Palavra-passe é obrigatória"),
 });
+
+export type LoginValues = z.infer<typeof loginSchema>;
 
 export const registerSchema = z.object({
   name: z.string().min(3, "O nome deve ter pelo menos 3 caracteres"),
@@ -19,9 +20,13 @@ export const registerSchema = z.object({
   password: z.string().min(6, "A palavra-passe deve ter pelo menos 6 caracteres"),
 });
 
+export type RegisterValues = z.infer<typeof registerSchema>;
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Introduza um e-mail válido"),
 });
+
+export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 
 export const resetPasswordSchema = z.object({
   password: z.string().min(6, "A nova senha deve ter pelo menos 6 caracteres"),
@@ -31,7 +36,4 @@ export const resetPasswordSchema = z.object({
   path: ["confirmPassword"], // O erro aparecerá no campo de confirmação
 });
 
-export type LoginValues = z.infer<typeof loginSchema>;
-export type RegisterValues = z.infer<typeof registerSchema>;
-export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;

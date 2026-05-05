@@ -6,6 +6,7 @@ import pg from "pg";
 
 const connectionString = process.env.DATABASE_URL;
 
+// Pool de conexão para PostgreSQL (Supabase/Neon)
 const pool = new pg.Pool({ connectionString });
 const adapter = new PrismaPg(pool);
 
@@ -14,8 +15,8 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
-    adapter, // <-- Aqui está a peça que faltava!
-    log: ["query"],
+    adapter,
+    log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
   });
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
