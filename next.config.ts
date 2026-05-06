@@ -6,11 +6,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Forçando a chave exatamente onde o log do Next.js está pedindo
   // @ts-ignore - Necessário pois o schema do TS pode estar desatualizado frente ao Turbopack
-  allowedDevOrigins: ['192.168.180.71', '192.168.56.1', '192.168.0.49', 'localhost:3000'],
+  allowedDevOrigins: ['192.168.100.87', '172.28.128.1', 'localhost:3000'],
   
   experimental: {
     serverActions: {
-      allowedOrigins: ['192.168.180.71', '192.168.56.1', '192.168.0.49', 'localhost:3000'],
+      allowedOrigins: ['192.168.100.87', '172.28.128.1', 'localhost:3000'],
     },
   },
   images: {

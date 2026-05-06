@@ -15,8 +15,10 @@ import {
   ShieldCheck,
   Mail,
   LogOut,
-  Server, // Ícone para Super Admin
-  Globe   // Ícone para Super Admin
+  Users,       // Ícone para Clientes
+  UsersRound,  // Ícone para Equipe/Staff
+  Server,      // Remova qualquer outra menção a "Server" abaixo desta
+  Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +31,9 @@ export function Sidebar({ role }: SidebarProps) {
 
   const userRoutes = [
     { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
-    { label: "Gastos", icon: Receipt, href: "/transactions" },
-    { label: "Metas", icon: Target, href: "/planning" },
-    { label: "Cartões", icon: CreditCard, href: "/cards" },
-    { label: "Custos Fixos", icon: CalendarClock, href: "/fixed-expenses" },
+    { label: "Agenda", icon: CalendarClock, href: "/appointments" }, // Ajustado para o motor de agenda
+    { label: "Clientes", icon: Users, href: "/customers" },           // NOVO LINK
+    { label: "Financeiro", icon: Receipt, href: "/transactions" },
     { label: "Perfil", icon: User, href: "/settings" },
   ];
 
@@ -79,7 +80,7 @@ export function Sidebar({ role }: SidebarProps) {
           </nav>
 
           {/* SEÇÃO SUPER ADMIN (Gestão Global do SaaS) */}
-          {role === "SUPER_ADMIN" && (
+          {role === "SUPERADMIN" && (
             <div className="mt-8 pt-8 border-t border-zinc-100">
               <p className="text-[10px] font-black text-purple-600 uppercase tracking-[0.2em] mb-4 px-4">
                 Master Control
@@ -100,36 +101,37 @@ export function Sidebar({ role }: SidebarProps) {
           )}
 
           {/* SEÇÃO ADMIN (Aparece para ADMIN e SUPER_ADMIN) */}
-          {(role === "ADMIN" || role === "SUPER_ADMIN") && (
-            <div className="mt-8 pt-8 border-t border-zinc-100">
-              <p className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] mb-4 px-4">
-                Administração
-              </p>
-              <nav className="space-y-1">
-                <Link
-                  href="/admin"
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
-                    pathname === "/admin" ? "bg-red-50 text-red-600" : "text-zinc-500 hover:bg-red-50 hover:text-red-600"
-                  )}
-                >
-                  <ShieldCheck className="h-5 w-5" />
-                  <span className="text-sm font-bold tracking-tight">Visão Geral</span>
-                </Link>
+          {(role === "ADMIN" || role === "SUPERADMIN") && (
+			<div className="mt-8 pt-8 border-t border-zinc-100">
+			  <p className="text-[10px] font-black text-red-400 uppercase tracking-[0.2em] mb-4 px-4">
+				Administração
+			  </p>
+			  <nav className="space-y-1">
+				{/* Link de Equipe: Essencial para o motor de agendas */}
+				<Link
+				  href="/staff"
+				  className={cn(
+					"flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+					pathname === "/staff" ? "bg-red-50 text-red-600" : "text-zinc-500 hover:bg-red-50 hover:text-red-600"
+				  )}
+				>
+				  <UsersRound className="h-5 w-5" />
+				  <span className="text-sm font-bold tracking-tight">Minha Equipe</span>
+				</Link>
 
-                <Link
-                  href="/admin/email"
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
-                    pathname === "/admin/email" ? "bg-red-50 text-red-600" : "text-zinc-500 hover:bg-red-50 hover:text-red-600"
-                  )}
-                >
-                  <Mail className="h-5 w-5" />
-                  <span className="text-sm font-bold tracking-tight">Configurar E-mail</span>
-                </Link>
-              </nav>
-            </div>
-          )}
+				<Link
+				  href="/admin"
+				  className={cn(
+					"flex items-center gap-3 px-4 py-3 rounded-xl transition-all",
+					pathname === "/admin" ? "bg-red-50 text-red-600" : "text-zinc-500 hover:bg-red-50 hover:text-red-600"
+				  )}
+				>
+				  <ShieldCheck className="h-5 w-5" />
+				  <span className="text-sm font-bold tracking-tight">Visão Geral</span>
+				</Link>
+			  </nav>
+			</div>
+		  )}
         </div>
 
         {/* Rodapé - Logout */}
