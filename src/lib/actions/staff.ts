@@ -43,3 +43,50 @@ export async function upsertStaffAction(values: unknown) {
     return { error: "E-mail ou Username já estão em uso." };
   }
 }
+
+export async function updateStaffScheduleAction(
+  staffId: string, 
+  schedules: { dayOfWeek: number, startTime: string, endTime: string, isWorking: boolean }[]
+) {
+  const session = await auth();
+  const orgId = session?.user?.orgId;
+
+  if (!orgId || session?.user?.role !== "ADMIN") {
+    return { error: "Não autorizado." };
+  }
+
+  try {
+    // Usamos um loop de upserts dentro de uma transação para garantir que ou salva tudo ou nada
+    await prisma.$transaction(
+      schedules.map((schedule) =>
+        prisma.staffSchedule.upsert({
+          where: {
+            userId_dayOfWeek: {
+              userId: staffId,
+              dayOfWeek: schedule.dayOfWeek,
+            },
+          },
+          update: {
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            isWorking: schedule.isWorking,
+          },
+          create: {
+            userId: staffId,
+            dayOfWeek: schedule.dayOfWeek,
+            startTime: schedule.startTime,
+            endTime: schedule.endTime,
+            isWorking: schedule.isWorking,
+            orgId: orgId,
+          },
+        })
+      )
+    );
+
+    revalidatePath("/staff");
+    return { success: "Horários atualizados com sucesso!" };
+  } catch (error) {
+    console.error(error);
+    return { error: "Erro ao salvar horários." };
+  }
+}

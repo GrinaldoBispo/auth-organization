@@ -45,8 +45,10 @@ model User {
   organization  Organization? @relation(fields: [orgId], references: [id])
 
   // Agendamentos onde este usuário é o prestador
-  appointments  Appointment[]
-
+  schedules StaffSchedule[]
+  breaks    ScheduleBreak[]
+  appointments Appointment[]
+  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -55,14 +57,17 @@ model User {
 
 model Organization {
   id        String   @id @default(cuid())
-  name      String   // Nome da Clínica, Salão ou Barbearia
-  slug      String   @unique // para futuras URLs: app.com/salao-do-joao
+  name      String   
+  slug      String   @unique 
   phone     String?
-  type      String?  // 'CLINIC', 'BARBERSHOP', 'SPA'
+  type      String?  
 
   users         User[]
   customers     Customer[]
   appointments  Appointment[]
+  
+  staffSchedules StaffSchedule[]
+  scheduleBreaks ScheduleBreak[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -118,4 +123,50 @@ model Appointment {
 
   @@index([orgId, date])
   @@map("appointments")
+}
+
+//////////////////////
+// DOMAIN: StaffSchedule
+//////////////////////
+
+model StaffSchedule {
+  id          String   @id @default(cuid())
+  dayOfWeek   Int      
+  startTime   String   
+  endTime     String   
+  isWorking   Boolean  @default(true)
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orgId       String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, dayOfWeek])
+  @@index([orgId])
+  @@map("staff_schedules")
+}
+
+//////////////////////
+// DOMAIN: ScheduleBreak
+//////////////////////
+
+model ScheduleBreak {
+  id        String   @id @default(cuid())
+  date      DateTime 
+  startTime String?  
+  endTime   String?
+  reason    String?  
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  orgId     String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@map("schedule_breaks")
 }

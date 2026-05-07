@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { ShieldCheck, UserCog, Mail, UserCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { StaffModal } from "@/components/staff/staff-modal";
+import { StaffScheduleModal } from "@/components/staff/staff-schedule-modal";
 
 export default async function StaffPage() {
   const session = await auth();
@@ -16,6 +17,7 @@ export default async function StaffPage() {
   // Busca todos os usuários da mesma organização
   const staff = await prisma.user.findMany({
     where: { orgId },
+	include: { schedules: true },
     orderBy: { name: "asc" },
   });
 
@@ -72,7 +74,7 @@ export default async function StaffPage() {
             </div>
 
             {/* Detalhes de contato/login */}
-            <div className="w-full pt-4 border-t border-zinc-50 space-y-2 mb-4">
+            <div className="w-full pt-4 border-t border-zinc-50 space-y-2 mb-6">
               <div className="flex items-center justify-center gap-2 text-xs text-zinc-500">
                 <Mail className="h-3 w-3" />
                 <span className="truncate">{member.email}</span>
@@ -82,10 +84,15 @@ export default async function StaffPage() {
                 <span>@{member.username}</span>
               </div>
             </div>
-
-            {/* Botão de Edição fixado no rodapé do card */}
-            <div className="mt-auto w-full">
+			
+            {/* Ações do Card centralizadas e sem duplicidade */}
+            <div className="mt-auto w-full flex items-center justify-center gap-2">
                <StaffModal staff={member} />
+               <StaffScheduleModal 
+                  staffId={member.id} 
+                  staffName={member.name || ""} 
+                  initialSchedules={member.schedules} 
+               />
             </div>
           </div>
         ))}
