@@ -1,13 +1,10 @@
-// prisma/schema.prisma
-
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"] 
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
   provider = "postgresql"
-  // No Prisma 7, a URL é definida apenas no prisma.config.ts
 }
 
 //////////////////////
@@ -15,9 +12,9 @@ datasource db {
 //////////////////////
 
 enum UserRole {
-  ADMIN      // Dono da Organização
-  STAFF      // Funcionário (Médico, Barbeiro, etc)
-  SUPERADMIN // Você (Gestor da Plataforma)
+  ADMIN
+  STAFF
+  SUPERADMIN
 }
 
 enum AppointmentStatus {
@@ -37,17 +34,18 @@ model User {
   name          String?
   username      String?   @unique
   email         String?   @unique
+  emailVerified DateTime?
+  image         String?
   password      String?
   role          UserRole  @default(STAFF)
   
-  // 🔗 Vínculo com a Unidade de Negócio
   orgId         String?
   organization  Organization? @relation(fields: [orgId], references: [id])
 
-  // Agendamentos onde este usuário é o prestador
-  schedules StaffSchedule[]
-  breaks    ScheduleBreak[]
-  appointments Appointment[]
+  // Relações Ajustadas
+  scheduleGroups StaffScheduleGroup[]
+  breaks         ScheduleBreak[]
+  appointments   Appointment[]
   
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -62,11 +60,12 @@ model Organization {
   phone     String?
   type      String?  
 
-  users         User[]
-  customers     Customer[]
-  appointments  Appointment[]
+  users          User[]
+  customers      Customer[]
+  appointments   Appointment[]
   
-  staffSchedules StaffSchedule[]
+  // Relações Ajustadas
+  scheduleGroups StaffScheduleGroup[]
   scheduleBreaks ScheduleBreak[]
 
   createdAt     DateTime @default(now())
@@ -76,16 +75,16 @@ model Organization {
 }
 
 //////////////////////
-// DOMAIN: CUSTOMER (Antigo Patient)
+// DOMAIN: CUSTOMER
 //////////////////////
 
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String   // Essencial para o n8n/WhatsApp
-  email     String?
+  id           String   @id @default(cuid())
+  name         String
+  phone        String   
+  email        String?
 
-  orgId     String
+  orgId        String
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   appointments Appointment[]
@@ -102,21 +101,19 @@ model Customer {
 //////////////////////
 
 model Appointment {
-  id        String            @id @default(cuid())
-  date      DateTime
-  status    AppointmentStatus @default(SCHEDULED)
-  notes     String?           @db.Text
+  id           String            @id @default(cuid())
+  date         DateTime
+  status       AppointmentStatus @default(SCHEDULED)
+  notes        String?           @db.Text
 
-  // Quem vai receber o serviço
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
-  // Quem vai realizar o serviço (Opcional, pode ser apenas a org)
-  providerId String?
-  provider   User?    @relation(fields: [providerId], references: [id])
+  providerId   String?
+  provider     User?             @relation(fields: [providerId], references: [id])
 
-  orgId      String
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  orgId        String
+  organization Organization      @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,28 +123,49 @@ model Appointment {
 }
 
 //////////////////////
-// DOMAIN: StaffSchedule
+// DOMAIN: StaffSchedule (ESTRUTURA DE GRADE)
 //////////////////////
 
-model StaffSchedule {
-  id          String   @id @default(cuid())
-  dayOfWeek   Int      
-  startTime   String   
-  endTime     String   
-  isWorking   Boolean  @default(true)
+model StaffScheduleGroup {
+  id           String   @id @default(cuid())
+  name         String   // Ex: "Agenda Principal - Manhã"
+  
+  startDate    DateTime // Data Inicial da vigência
+  endDate      DateTime? // Data Final da vigência
+  slotDuration Int      @default(30) // Tempo de atendimento em minutos
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  orgId       String
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  orgId        String
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  intervals    StaffScheduleInterval[]
 
-  @@unique([userId, dayOfWeek])
-  @@index([orgId])
-  @@map("staff_schedules")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("staff_schedule_groups")
+}
+
+model StaffScheduleInterval {
+  id        String   @id @default(cuid())
+  startTime String   // Ex: "08:00"
+  endTime   String   // Ex: "12:00"
+  
+  // Dias da semana
+  monday    Boolean  @default(false)
+  tuesday   Boolean  @default(false)
+  wednesday Boolean  @default(false)
+  thursday  Boolean  @default(false)
+  friday    Boolean  @default(false)
+  saturday  Boolean  @default(false)
+  sunday    Boolean  @default(false)
+
+  groupId   String
+  group     StaffScheduleGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@map("staff_schedule_intervals")
 }
 
 //////////////////////
@@ -169,4 +187,18 @@ model ScheduleBreak {
 
   @@index([userId, date])
   @@map("schedule_breaks")
+}
+
+model SystemSettings {
+  id               String   @id @default("system_config")
+  smtpHost         String
+  smtpPort         String
+  smtpUser         String
+  smtpPass         String?
+  useSecure        Boolean  @default(false)
+  fromName         String   @default("Sistema")
+  fromEmail        String
+  adminNotifyEmail String
+  emailTemplate    String   @db.Text
+  updatedAt        DateTime @updatedAt
 }

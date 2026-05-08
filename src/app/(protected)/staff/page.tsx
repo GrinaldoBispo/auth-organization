@@ -17,7 +17,7 @@ export default async function StaffPage() {
   // Busca todos os usuários da mesma organização
   const staff = await prisma.user.findMany({
     where: { orgId },
-	include: { schedules: true },
+	include: { scheduleGroups: true },
     orderBy: { name: "asc" },
   });
 
@@ -91,7 +91,7 @@ export default async function StaffPage() {
                <StaffScheduleModal 
                   staffId={member.id} 
                   staffName={member.name || ""} 
-                  initialSchedules={member.schedules} 
+                  initialSchedules={member.scheduleGroups} 
                />
             </div>
           </div>

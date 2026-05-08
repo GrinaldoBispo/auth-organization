@@ -50,7 +50,7 @@ export function StaffModal({ staff }: StaffModalProps) {
   const [isPending, startTransition] = useTransition();
 
   const form = useForm<StaffValues>({
-    resolver: zodResolver(staffSchema),
+    resolver: zodResolver(staffSchema) as any,
     defaultValues: {
       id: staff?.id || "",
       name: staff?.name || "",

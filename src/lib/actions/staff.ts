@@ -59,7 +59,7 @@ export async function updateStaffScheduleAction(
     // Usamos um loop de upserts dentro de uma transação para garantir que ou salva tudo ou nada
     await prisma.$transaction(
       schedules.map((schedule) =>
-        prisma.staffSchedule.upsert({
+        (prisma as any).staffSchedule.upsert({
           where: {
             userId_dayOfWeek: {
               userId: staffId,
