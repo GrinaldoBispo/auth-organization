@@ -25,9 +25,10 @@ interface StaffScheduleModalProps {
   staffId: string;
   staffName: string;
   initialSchedules?: any[]; // Você pode tipar melhor depois
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function StaffScheduleModal({ staffId, staffName, initialSchedules }: StaffScheduleModalProps) {
+export function StaffScheduleModal({ staffId, staffName, initialSchedules, onOpenChange }: StaffScheduleModalProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -52,16 +53,41 @@ export function StaffScheduleModal({ staffId, staffName, initialSchedules }: Sta
     setSchedules(prev => prev.map(s => s.dayOfWeek === day ? { ...s, [field]: value } : s));
   };
 
+  // Localize a função onSave dentro do seu Modal
   const onSave = () => {
     startTransition(async () => {
-      const result = await updateStaffScheduleAction(staffId, schedules);
-      if (result.error) toast.error(result.error);
-      else {
-        toast.success(result.success);
-        setOpen(false);
-      }
-    });
-  };
+    // FORMATAMOS OS DADOS PARA O NOVO MODELO:
+    const payload = {
+      name: "Agenda Padrão", 
+      slotDuration: 30,      
+      intervals: schedules.map(s => ({
+        startTime: s.startTime,
+        endTime: s.endTime,
+        monday: s.dayOfWeek === 1 && s.isWorking,
+        tuesday: s.dayOfWeek === 2 && s.isWorking,
+        wednesday: s.dayOfWeek === 3 && s.isWorking,
+        thursday: s.dayOfWeek === 4 && s.isWorking,
+        friday: s.dayOfWeek === 5 && s.isWorking,
+        saturday: s.dayOfWeek === 6 && s.isWorking,
+        sunday: s.dayOfWeek === 0 && s.isWorking,
+      }))
+    };
+
+    const result = await updateStaffScheduleAction(staffId, payload);
+
+		if (result.error) {
+		  toast.error(result.error);
+		} else {
+		  toast.success(result.success);
+		  
+		  // ADICIONE A VERIFICAÇÃO AQUI:
+		  if (onOpenChange) {
+			onOpenChange(false);
+		  }
+		}
+	  });
+	};
+  
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

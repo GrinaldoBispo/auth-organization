@@ -17,7 +17,7 @@ export const resetPasswordAction = async (values: any, token: string | null) => 
   const { password } = validatedFields.data;
 
   // 2. Busca o token no banco
-  const existingToken = await (prisma as any).passwordResetToken.findUnique({
+  const existingToken = await prisma.passwordResetToken.findUnique({
     where: { token }
   });
 
@@ -44,7 +44,7 @@ export const resetPasswordAction = async (values: any, token: string | null) => 
         where: { id: existingUser.id },
         data: { password: hashedPassword },
       }),
-      (prisma as any).passwordResetToken.delete({
+      prisma.passwordResetToken.delete({
         where: { id: existingToken.id },
       }),
     ]);

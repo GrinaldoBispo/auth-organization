@@ -8,7 +8,6 @@ import Link from "next/link";
 export default async function AdminDashboard() {
   // Busca dados REAIS do banco
   const userCount = await prisma.user.count();
-  // @ts-ignore
   const config = await prisma.systemSettings.findUnique({ where: { id: "system_config" } });
 
   return (

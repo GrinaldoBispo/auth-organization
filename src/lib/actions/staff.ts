@@ -8,6 +8,9 @@ import { revalidatePath } from "next/cache";
 import { hash } from "bcryptjs";
 import { staffSchema } from "@/lib/validations/staff";
 
+/**
+ * Cria ou Atualiza um membro da equipe (Usuário)
+ */
 export async function upsertStaffAction(values: unknown) {
   const session = await auth();
   const adminOrgId = session?.user?.orgId;
@@ -33,7 +36,7 @@ export async function upsertStaffAction(values: unknown) {
         username,
         role,
         password: defaultPassword,
-        orgId: adminOrgId, // O funcionário herda a empresa do Admin
+        orgId: adminOrgId,
       },
     });
 
@@ -44,9 +47,16 @@ export async function upsertStaffAction(values: unknown) {
   }
 }
 
+/**
+ * Atualiza os horários do funcionário usando o NOVO MODELO (Groups + Intervals)
+ */
 export async function updateStaffScheduleAction(
   staffId: string, 
-  schedules: { dayOfWeek: number, startTime: string, endTime: string, isWorking: boolean }[]
+  data: { 
+    name: string, 
+    slotDuration: number, 
+    intervals: any[] 
+  }
 ) {
   const session = await auth();
   const orgId = session?.user?.orgId;
@@ -56,37 +66,48 @@ export async function updateStaffScheduleAction(
   }
 
   try {
-    // Usamos um loop de upserts dentro de uma transação para garantir que ou salva tudo ou nada
-    await prisma.$transaction(
-      schedules.map((schedule) =>
-        (prisma as any).staffSchedule.upsert({
-          where: {
-            userId_dayOfWeek: {
-              userId: staffId,
-              dayOfWeek: schedule.dayOfWeek,
-            },
-          },
-          update: {
-            startTime: schedule.startTime,
-            endTime: schedule.endTime,
-            isWorking: schedule.isWorking,
-          },
-          create: {
-            userId: staffId,
-            dayOfWeek: schedule.dayOfWeek,
-            startTime: schedule.startTime,
-            endTime: schedule.endTime,
-            isWorking: schedule.isWorking,
-            orgId: orgId,
-          },
+    // 1. Buscamos se o funcionário já tem um grupo de agenda principal
+    const existingGroup = await prisma.staffScheduleGroup.findFirst({
+      where: { userId: staffId, orgId }
+    });
+
+    if (existingGroup) {
+      // 2. Atualiza o grupo existente e seus intervalos
+      await prisma.$transaction([
+        // Limpa intervalos antigos para evitar duplicidade
+        prisma.staffScheduleInterval.deleteMany({ where: { groupId: existingGroup.id } }),
+        // Atualiza os dados básicos do grupo
+        prisma.staffScheduleGroup.update({
+          where: { id: existingGroup.id },
+          data: {
+            name: data.name,
+            slotDuration: data.slotDuration,
+            intervals: {
+              create: data.intervals // Cria os novos intervalos vindos do formulário
+            }
+          }
         })
-      )
-    );
+      ]);
+    } else {
+      // 3. Se não existe, cria o primeiro grupo de agenda do funcionário
+      await prisma.staffScheduleGroup.create({
+        data: {
+          name: data.name || "Agenda Padrão",
+          userId: staffId,
+          orgId: orgId,
+          slotDuration: data.slotDuration || 30,
+          startDate: new Date(),
+          intervals: {
+            create: data.intervals
+          }
+        }
+      });
+    }
 
     revalidatePath("/staff");
-    return { success: "Horários atualizados com sucesso!" };
+    return { success: "Agenda da equipe atualizada com sucesso!" };
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao salvar agenda da equipe:", error);
     return { error: "Erro ao salvar horários." };
   }
 }

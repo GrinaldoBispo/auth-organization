@@ -4,20 +4,21 @@
 
 import { prisma } from "@/lib/prisma";
 import { generateAvailableSlots } from "@/lib/utils/generate-slots";
+import { startOfDay, endOfDay, format } from "date-fns";
 
 /**
- * Busca os slots disponíveis para um profissional em uma data específica,
- * filtrando opcionalmente por uma agenda (groupId)
+ * Busca os slots de tempo e cruza com agendamentos existentes,
+ * trazendo dados completos do cliente para possibilitar edição.
  */
 export async function getStaffAvailabilityAction(userId: string, date: Date, groupId?: string) {
   const dayOfWeek = date.getDay();
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const dayName = dayNames[dayOfWeek];
 
+  // 1. Busca a configuração da agenda (Grade)
   const scheduleGroup = await prisma.staffScheduleGroup.findFirst({
     where: {
       userId,
-      // Se o groupId for passado, garantimos que pegamos apenas essa agenda
       ...(groupId ? { id: groupId } : {}), 
       startDate: { lte: date },
       OR: [
@@ -38,7 +39,31 @@ export async function getStaffAvailabilityAction(userId: string, date: Date, gro
     return { slots: [], message: "Nenhum horário disponível." };
   }
 
-  let allSlots: string[] = [];
+  // 2. Busca agendamentos com dados completos do Customer e Notas
+  const existingAppointments = await prisma.appointment.findMany({
+    where: {
+      scheduleGroupId: scheduleGroup.id,
+      date: {
+        gte: startOfDay(date),
+        lte: endOfDay(date),
+      },
+      status: {
+        notIn: ["CANCELLED"]
+      }
+    },
+    include: {
+      customer: {
+        select: { 
+          name: true,
+          phone: true,   // Adicionado para edição
+          email: true    // Adicionado para edição
+        }
+      }
+    }
+  });
+
+  // 3. Gera todos os horários teóricos
+  let allTimeSlots: string[] = [];
   
   scheduleGroup.intervals.forEach((interval) => {
     const intervalSlots = generateAvailableSlots(
@@ -46,17 +71,34 @@ export async function getStaffAvailabilityAction(userId: string, date: Date, gro
       interval.endTime,
       scheduleGroup.slotDuration
     );
-    allSlots = [...allSlots, ...intervalSlots];
+    allTimeSlots = [...allTimeSlots, ...intervalSlots];
+  });
+
+  // 4. Cruza horários com dados ricos para o modal
+  const finalSlots = allTimeSlots.sort().map((time) => {
+    const appointment = existingAppointments.find(
+      (app) => format(new Date(app.date), "HH:mm") === time
+    );
+
+    return {
+      time,
+      available: !appointment,
+      clientName: appointment?.customer.name || null,
+      clientPhone: appointment?.customer.phone || null, // Novo campo
+      clientEmail: appointment?.customer.email || null, // Novo campo
+      notes: appointment?.notes || null,               // Novo campo
+      appointmentId: appointment?.id || null
+    };
   });
 
   return { 
-    slots: allSlots.sort(), 
+    slots: finalSlots, 
     slotDuration: scheduleGroup.slotDuration 
   };
 }
 
 /**
- * Busca os dias ativos de uma AGENDA específica (ou de todas do profissional)
+ * Busca os dias ativos (mantido para o funcionamento do calendário)
  */
 export async function getActiveDaysAction(userId: string, groupId?: string) {
   const scheduleGroups = await prisma.staffScheduleGroup.findMany({

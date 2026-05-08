@@ -16,7 +16,6 @@ export default async function EmailConfigPage() {
 
   // BUSCA OS DADOS NO BANCO:
   // Tentamos buscar a configuração única do sistema
-  // @ts-ignore
   const initialData = await prisma.systemSettings.findUnique({
     where: { id: "system_config" },
   });

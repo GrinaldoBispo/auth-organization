@@ -7,17 +7,17 @@ export const generatePasswordResetToken = async (email: string) => {
   const token = uuidv4();
   const expires = new Date(new Date().getTime() + 3600 * 1000); // Expira em 1 hora
 
-  const existingToken = await (prisma as any).passwordResetToken.findFirst({
+  const existingToken = await prisma.passwordResetToken.findFirst({
     where: { email }
   });
 
   if (existingToken) {
-    await (prisma as any).passwordResetToken.delete({
+    await prisma.passwordResetToken.delete({
       where: { id: existingToken.id }
     });
   }
 
-  const passwordResetToken = await (prisma as any).passwordResetToken.create({
+  const passwordResetToken = await prisma.passwordResetToken.create({
     data: {
       email,
       token,

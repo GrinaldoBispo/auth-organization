@@ -7,15 +7,29 @@ import { Calendar } from "@/components/ui/calendar";
 import { getStaffAvailabilityAction, getActiveDaysAction } from "@/lib/actions/availability";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { Clock, MoreVertical, Calendar as CalendarIcon, Plus, Search, EyeOff } from "lucide-react";
+import { Clock, MoreVertical, Calendar as CalendarIcon, User, EyeOff, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ScheduleGroupModal } from "@/components/staff/schedule-group-modal";
 import { AgendaMenu } from "./agenda-menu";
+import { CreateAppointmentModal } from "./create-appointment-modal";
+
+interface TimeSlot {
+  time: string;
+  available: boolean;
+  clientName: string | null;
+  clientPhone?: string | null;
+  clientEmail?: string | null;
+  notes?: string | null;
+  appointmentId: string | null;
+}
 
 export function AppointmentClientView({ staff }: { staff: any[] }) {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null);
+  const [editingAppointment, setEditingAppointment] = useState<any>(null);
+
   const allAgendas = useMemo(() => {
     return staff.flatMap(professional => 
       (professional.scheduleGroups || []).map((group: any) => ({
@@ -27,7 +41,7 @@ export function AppointmentClientView({ staff }: { staff: any[] }) {
   }, [staff]);
 
   const [selectedAgendaId, setSelectedAgendaId] = useState<string>(allAgendas[0]?.id || "");
-  const [slots, setSlots] = useState<string[]>([]);
+  const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeDays, setActiveDays] = useState<number[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -46,18 +60,41 @@ export function AppointmentClientView({ staff }: { staff: any[] }) {
   };
   
   const handleModalClose = (isOpen: boolean) => {
-	  if (!isOpen) {
-		// Quando o modal fecha, forçamos uma atualização leve 
-		// para garantir que o calendário e a timeline estejam sincronizados
-		setRefreshKey(prev => prev + 1);
-	  }
-	};
+    if (!isOpen) {
+      setRefreshKey(prev => prev + 1);
+      setEditingAppointment(null); // Limpa ao fechar
+    }
+  };
 
-  // Carrega os dias ativos da agenda selecionada
+  const handleSlotClick = (slot: TimeSlot) => {
+    if (!date) return;
+    
+    // 1. IMPORTANTE: Limpa o estado de edição anterior antes de qualquer coisa
+    setEditingAppointment(null);
+
+    const [hours, minutes] = slot.time.split(":").map(Number);
+    const fullDate = new Date(date);
+    fullDate.setHours(hours, minutes, 0, 0);
+    
+    setSelectedDateTime(fullDate);
+
+    // 2. Só define se for edição real
+    if (!slot.available && slot.appointmentId) {
+      setEditingAppointment({
+        id: slot.appointmentId,
+        clientName: slot.clientName,
+        clientPhone: slot.clientPhone || "",
+        clientEmail: slot.clientEmail || "",
+        notes: slot.notes || "",
+      });
+    }
+    
+    setIsModalOpen(true);
+  };
+
   useEffect(() => {
     async function loadActiveDays() {
       if (!currentAgenda?.professionalId || !currentAgenda?.id) return;
-
       try {
         const days = await getActiveDaysAction(currentAgenda.professionalId, currentAgenda.id);
         setActiveDays(days);
@@ -68,14 +105,12 @@ export function AppointmentClientView({ staff }: { staff: any[] }) {
     loadActiveDays();
   }, [selectedAgendaId, refreshKey, allAgendas]);
 
-  // AJUSTE AQUI: Carrega os slots passando o ID da agenda (groupId)
   useEffect(() => {
     async function loadSlots() {
       if (!currentAgenda?.professionalId || !currentAgenda?.id || !date) return;
       
       setLoading(true);
       try {
-        // Agora passamos professionalId, data e o ID da agenda selecionada
         const res = await getStaffAvailabilityAction(
           currentAgenda.professionalId, 
           date, 
@@ -89,7 +124,7 @@ export function AppointmentClientView({ staff }: { staff: any[] }) {
       }
     }
     loadSlots();
-  }, [selectedAgendaId, date, refreshKey]); // Depende do ID da agenda e da data
+  }, [selectedAgendaId, date, refreshKey]);
 
   return (
     <div className="flex h-[calc(100vh-12rem)] gap-0 border border-zinc-200 rounded-3xl overflow-hidden bg-white shadow-sm font-sans">
@@ -155,7 +190,13 @@ export function AppointmentClientView({ staff }: { staff: any[] }) {
 
       <main className="flex-1 flex flex-col bg-white">
         <header className="p-4 border-b border-zinc-100 flex items-center justify-between">
-          <Button className="bg-[#43b5a1] hover:bg-[#369685] text-white font-bold uppercase text-[10px] tracking-widest rounded-md px-6 shadow-sm transition-all active:scale-95">
+          <Button 
+            onClick={() => {
+              setEditingAppointment(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-[#43b5a1] hover:bg-[#369685] text-white font-bold uppercase text-[10px] tracking-widest rounded-md px-6 shadow-sm transition-all active:scale-95"
+          >
             Marcar
           </Button>
           <div className="text-center px-4">
@@ -178,16 +219,44 @@ export function AppointmentClientView({ staff }: { staff: any[] }) {
             <div className="divide-y divide-zinc-50">
               {slots.length > 0 ? (
                 slots.map((slot) => (
-                  <div key={slot} className="group flex items-center p-4 hover:bg-zinc-50 transition-colors cursor-pointer border-l-4 border-l-transparent hover:border-l-[#43b5a1]">
+                  <div 
+                    key={`${slot.time}-${slot.appointmentId || 'free'}`}
+                    onClick={() => handleSlotClick(slot)}
+                    className={cn(
+                        "group flex items-center p-4 transition-colors border-l-4",
+                        slot.available 
+                          ? "hover:bg-zinc-50 cursor-pointer border-l-transparent hover:border-l-[#43b5a1]" 
+                          : "bg-blue-50/40 border-l-blue-500 cursor-pointer"
+                    )}
+                  >
                     <div className="flex items-center gap-6 w-full">
                       <div className="flex items-center gap-3 w-24 shrink-0">
-                        <Clock className="h-4 w-4 text-[#43b5a1]" />
-                        <span className="text-sm font-black text-zinc-600">{slot}</span>
+                        <Clock className={cn("h-4 w-4", slot.available ? "text-[#43b5a1]" : "text-blue-500")} />
+                        <span className="text-sm font-black text-zinc-600">{slot.time}</span>
                       </div>
-                      <div className="flex-1 h-8 rounded-lg border border-dashed border-zinc-100 group-hover:border-zinc-200 transition-all flex items-center px-4">
-                         <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Disponível</span>
+                      
+                      <div className="flex-1 h-10 rounded-xl border border-dashed border-zinc-100 flex items-center px-4 transition-all">
+                         {slot.available ? (
+                           <span className="text-[10px] font-bold text-zinc-300 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                             Livre para agendar
+                           </span>
+                         ) : (
+                           <div className="flex items-center gap-2">
+                             <div className="bg-blue-500 p-1 rounded-md">
+                                <User className="h-3 w-3 text-white" />
+                             </div>
+                             <span className="text-[11px] font-black text-blue-700 uppercase tracking-tight">
+                               {slot.clientName}
+                             </span>
+                           </div>
+                         )}
                       </div>
-                      <MoreVertical className="h-4 w-4 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      
+                      {!slot.available && (
+                         <div className="px-3 py-1 bg-blue-100 rounded-full">
+                            <span className="text-[9px] font-bold text-blue-600 uppercase">Reservado</span>
+                         </div>
+                      )}
                     </div>
                   </div>
                 ))
@@ -202,6 +271,20 @@ export function AppointmentClientView({ staff }: { staff: any[] }) {
           )}
         </div>
       </main>
+
+      {isModalOpen && selectedDateTime && (
+        <CreateAppointmentModal 
+          key={editingAppointment?.id || `new-${selectedDateTime.getTime()}`}
+          open={isModalOpen}
+          onOpenChange={setIsModalOpen}
+          selectedDate={selectedDateTime}
+          providerId={currentAgenda?.professionalId}
+          scheduleGroupId={currentAgenda?.id}
+          onSuccess={handleRefresh}
+          appointmentId={editingAppointment?.id}
+          initialData={editingAppointment}
+        />
+      )}
     </div>
   );
 }
