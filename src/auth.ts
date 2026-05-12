@@ -35,7 +35,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             }
           });
 
-          if (!user || !user.password) return null;
+          if (!user || !user.password || user.active === false ) return null;
 
           const passwordsMatch = await compare(password, user.password);
 
@@ -85,34 +85,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     async jwt({ token, user, trigger, session }) {
-  if (trigger === "update" && session?.user) {
-    return { ...token, ...session.user };
-  }
+	  if (trigger === "update" && session?.user) {
+		return { ...token, ...session.user };
+	  }
 
-  // No login inicial, o objeto 'user' vem do authorize() ou do provider
-  if (user) {
-    token.role = (user as any).role;
-    token.orgId = (user as any).orgId;
-    token.username = (user as any).username;
-    return token; // Retorna imediatamente no login
-  }
+	  // Login inicial
+	  if (user) {
+		token.role = (user as any).role;
+		token.orgId = (user as any).orgId;
+		token.username = (user as any).username;
+		return token;
+	  }
 
-  // Só buscamos no banco se o token ainda não tiver as informações essenciais
-  if (!token.role || token.orgId === undefined) {
-    const dbUser = await prisma.user.findUnique({
-      where: { id: token.sub },
-      select: { role: true, orgId: true, username: true, image: true, name: true }
-    });
+	  // Verificação de segurança contínua
+	  try {
+		const dbUser = await prisma.user.findUnique({
+		  where: { id: token.sub },
+		  select: { active: true, role: true, orgId: true, username: true }
+		});
 
-    if (dbUser) {
-      token.role = dbUser.role;
-      token.orgId = dbUser.orgId;
-      token.username = dbUser.username;
-    }
-  }
-  
-  return token;
-},
+		// Se o usuário foi deletado ou desativado no banco
+		if (!dbUser || !dbUser.active) {
+		  // Retornamos um token vazio/inválido em vez de null para evitar o Crash
+		  return { ...token, error: "UserInactive" };
+		}
+
+		token.role = dbUser.role;
+		token.orgId = dbUser.orgId;
+		token.username = dbUser.username;
+	  } catch (error) {
+		return { ...token, error: "ConnectionError" };
+	  }
+
+	  return token;
+	},
 
     async session({ session, token }) {
       if (session.user) {

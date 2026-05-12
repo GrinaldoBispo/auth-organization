@@ -7,38 +7,19 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { appointmentSchema } from "@/lib/validations/appointment";
 
-/**
- * CRIAÇÃO: Localiza/Cria cliente e registra o agendamento
- */
 export async function createAppointmentAction(values: unknown) {
   const session = await auth();
   const orgId = session?.user?.orgId;
-
   if (!orgId) return { error: "Não autorizado." };
 
   const validatedFields = appointmentSchema.safeParse(values);
   if (!validatedFields.success) return { error: "Dados inválidos." };
 
-  const { 
-    clientName, 
-    clientPhone, 
-    clientEmail, 
-    date, 
-    notes, 
-    providerId, 
-    scheduleGroupId 
-  } = validatedFields.data;
+  // clientPhone já chega aqui apenas com números graças ao transform do Zod
+  const { clientName, clientPhone, clientEmail, date, notes, providerId, scheduleGroupId } = validatedFields.data;
 
   try {
     return await prisma.$transaction(async (tx) => {
-      // 1. Verifica se o horário foi ocupado no milissegundo em que o usuário preenchia o form
-      const conflict = await tx.appointment.findFirst({
-        where: { scheduleGroupId, date, status: { not: "CANCELLED" } }
-      });
-
-      if (conflict) return { error: "Este horário acabou de ser ocupado. Por favor, escolha outro." };
-
-      // 2. Busca ou Cria o Cliente (Opção B)
       let customer = await tx.customer.findFirst({
         where: { phone: clientPhone, orgId }
       });
@@ -49,71 +30,85 @@ export async function createAppointmentAction(values: unknown) {
         });
       }
 
-      // 3. Cria o Agendamento
-      const appointment = await tx.appointment.create({
-        data: {
-          date,
-          notes,
-          customerId: customer.id,
-          providerId,
-          scheduleGroupId,
-          orgId,
-          status: "SCHEDULED"
+      const conflict = await tx.appointment.findFirst({
+        where: { scheduleGroupId, date, status: { not: "CANCELLED" } }
+      });
+      if (conflict) return { error: "Este horário já foi preenchido." };
+
+      await tx.appointment.create({
+        data: { 
+          date, 
+          notes, 
+          customerId: customer.id, 
+          providerId, 
+          scheduleGroupId, 
+          orgId, 
+          status: "SCHEDULED" 
         }
       });
 
       revalidatePath("/appointments");
-      return { success: "Agendamento realizado!", id: appointment.id };
+      revalidatePath("/customers");
+      return { success: "Agendamento confirmado!" };
     });
   } catch (error) {
-    console.error("ERRO CREATE_APPOINTMENT:", error);
-    return { error: "Falha ao salvar agendamento." };
+    return { error: "Erro ao processar o agendamento." };
   }
 }
 
-/**
- * ATUALIZAÇÃO: Valida conflito e altera apenas data/notas
- */
 export async function updateAppointmentAction(id: string, values: unknown) {
   const session = await auth();
   const orgId = session?.user?.orgId;
-  
   if (!orgId) return { error: "Não autorizado." };
 
   const validatedFields = appointmentSchema.safeParse(values);
   if (!validatedFields.success) return { error: "Dados inválidos." };
 
-  const { date, notes, scheduleGroupId } = validatedFields.data;
+  const { clientPhone, date, notes, scheduleGroupId } = validatedFields.data;
 
   try {
-    // 1. Validação de conflito (ignora o próprio ID)
-    const conflict = await prisma.appointment.findFirst({
-      where: {
-        id: { not: id },
-        scheduleGroupId,
-        date,
-        status: { not: "CANCELLED" }
+    return await prisma.$transaction(async (tx) => {
+      const targetCustomer = await tx.customer.findFirst({
+        where: { phone: clientPhone, orgId }
+      });
+
+      if (!targetCustomer) {
+        return { error: "Este número não existe na base. Use um número já cadastrado." };
       }
+
+      const conflict = await tx.appointment.findFirst({
+        where: { id: { not: id }, scheduleGroupId, date, status: { not: "CANCELLED" } }
+      });
+      if (conflict) return { error: "Este horário já está ocupado." };
+
+      await tx.appointment.update({
+        where: { id, orgId },
+        data: { date, notes, customerId: targetCustomer.id }
+      });
+
+      revalidatePath("/appointments");
+      revalidatePath("/customers");
+      return { success: "Agendamento atualizado!" };
     });
+  } catch (error) {
+    return { error: "Erro ao atualizar." };
+  }
+}
 
-    if (conflict) {
-      return { error: "O novo horário selecionado já está ocupado por outro agendamento." };
-    }
+export async function cancelAppointmentAction(id: string) {
+  const session = await auth();
+  const orgId = session?.user?.orgId;
+  if (!orgId) return { error: "Não autorizado." };
 
-    // 2. Executa o Update
+  try {
     await prisma.appointment.update({
       where: { id, orgId },
-      data: {
-        date,
-        notes,
-        // Mantemos os dados do cliente intactos por segurança
-      }
+      data: { status: "CANCELLED" }
     });
 
     revalidatePath("/appointments");
-    return { success: "Agendamento atualizado com sucesso!" };
+    return { success: "Agendamento cancelado!" };
   } catch (error) {
-    console.error("ERRO UPDATE_APPOINTMENT:", error);
-    return { error: "Falha ao atualizar agendamento." };
+    return { error: "Erro ao cancelar." };
   }
 }

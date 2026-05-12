@@ -2,13 +2,13 @@
 
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { customerSchema, CustomerValues } from "@/lib/validations/customer";
 import { upsertCustomerAction } from "@/lib/actions/customer";
 import { toast } from "sonner";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, Edit2 } from "lucide-react";
 
 import {
   Dialog,
@@ -27,8 +27,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Edit2 } from "lucide-react"; // Adicione o ícone de edição
-import { useEffect } from "react";
 
 interface CustomerModalProps {
   customer?: {
@@ -52,33 +50,44 @@ export function CustomerModal({ customer }: CustomerModalProps) {
       email: customer?.email || "",
     },
   });
-  
-  useEffect(() => {
-	  if (customer) {
-		form.reset({
-		  id: customer.id,
-		  name: customer.name,
-		  phone: customer.phone,
-		  email: customer.email || "",
-		});
-	  } else {
-		form.reset({ id: "", name: "", phone: "", email: "" });
-	  }
-	}, [customer, open, form]);
 
-  const onSubmit = (values: CustomerValues) => {
-    startTransition(async () => {
-      const result = await upsertCustomerAction(values);
-      if (result.error) {
-        toast.error(result.error);
-      } else {
-        toast.success(result.success);
-        setOpen(false);
-		if (!customer)
-			form.reset();
-      }
-    });
+  // Função para formatar o telefone visualmente enquanto digita
+  const formatPhone = (value: string) => {
+    const numbers = value.replace(/\D/g, "");
+    if (numbers.length <= 10) {
+      return numbers.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+    }
+    return numbers.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
   };
+
+  useEffect(() => {
+    if (customer) {
+      form.reset({
+        id: customer.id,
+        name: customer.name,
+        // Aplicamos a máscara ao carregar para edição
+        phone: formatPhone(customer.phone),
+        email: customer.email || "",
+      });
+    } else {
+      form.reset({ id: "", name: "", phone: "", email: "" });
+    }
+  }, [customer, open, form]);
+
+	const onSubmit = (values: CustomerValues) => {
+		startTransition(async () => {
+		  const result = await upsertCustomerAction(values);
+
+		  // Verificação de tipo segura para o TypeScript
+		  if ("error" in result && result.error) {
+			toast.error(result.error);
+		  } else if ("success" in result && result.success) {
+			toast.success(result.success);
+			setOpen(false);
+			if (!customer) form.reset();
+		  }
+		});
+	  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -95,7 +104,7 @@ export function CustomerModal({ customer }: CustomerModalProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Cadastrar Cliente</DialogTitle>
+          <DialogTitle>{customer ? "Editar Cliente" : "Cadastrar Cliente"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -105,7 +114,9 @@ export function CustomerModal({ customer }: CustomerModalProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome Completo</FormLabel>
-                  <FormControl><Input {...field} placeholder="João Silva" disabled={isPending}/></FormControl>
+                  <FormControl>
+                    <Input {...field} placeholder="João Silva" disabled={isPending} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -116,7 +127,17 @@ export function CustomerModal({ customer }: CustomerModalProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>WhatsApp</FormLabel>
-                  <FormControl><Input {...field} placeholder="(00) 00000-0000" disabled={isPending}/></FormControl>
+                  <FormControl>
+                    <Input 
+                      {...field} 
+                      placeholder="(00) 00000-0000" 
+                      disabled={isPending}
+                      onChange={(e) => {
+                        const masked = formatPhone(e.target.value);
+                        field.onChange(masked);
+                      }}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -127,13 +148,19 @@ export function CustomerModal({ customer }: CustomerModalProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>E-mail (Opcional)</FormLabel>
-                  <FormControl><Input {...field} placeholder="email@exemplo.com" disabled={isPending}/></FormControl>
+                  <FormControl>
+                    <Input {...field} placeholder="email@exemplo.com" disabled={isPending} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? <Loader2 className="animate-spin h-4 w-4" /> : "Salvar Cliente"}
+              {isPending ? (
+                <Loader2 className="animate-spin h-4 w-4" />
+              ) : (
+                customer ? "Salvar Alterações" : "Salvar Cliente"
+              )}
             </Button>
           </form>
         </Form>

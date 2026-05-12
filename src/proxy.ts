@@ -8,13 +8,19 @@ const { auth } = NextAuth(authConfig);
 export default auth((req) => {
   const { nextUrl } = req;
   const isLoggedIn = !!req.auth;
+  // @ts-ignore - Captura o erro que injetamos no token
+  const isInactive = req.auth?.error === "UserInactive";
 
   const isApiAuthRoute = nextUrl.pathname.startsWith("/api/auth");
   const isPublicRoute = ["/", "/login", "/register", "/error"].includes(nextUrl.pathname);
 
   if (isApiAuthRoute) return;
 
-  // 1. Bloqueio de acesso anônimo
+  // Se o usuário está logado mas foi desativado, manda para o erro ou login
+  if (isInactive) {
+    return Response.redirect(new URL("/login?error=InactiveUser", nextUrl));
+  }
+
   if (!isLoggedIn && !isPublicRoute) {
     return Response.redirect(new URL("/login", nextUrl));
   }

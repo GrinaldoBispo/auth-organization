@@ -1,5 +1,3 @@
-// src/lib/actions/staff.ts
-
 "use server"
 
 import { auth } from "@/auth";
@@ -9,12 +7,13 @@ import { hash } from "bcryptjs";
 import { staffSchema } from "@/lib/validations/staff";
 
 /**
- * Cria ou Atualiza um membro da equipe (Usuário)
+ * Cria ou Atualiza um membro da equipe (User/Staff)
  */
 export async function upsertStaffAction(values: unknown) {
   const session = await auth();
   const adminOrgId = session?.user?.orgId;
 
+  // Proteção: Apenas ADMIN da mesma organização pode gerenciar equipe
   if (!adminOrgId || session?.user?.role !== "ADMIN") {
     return { error: "Acesso negado." };
   }
@@ -29,7 +28,14 @@ export async function upsertStaffAction(values: unknown) {
 
     await prisma.user.upsert({
       where: { id: id || "new-staff" },
-      update: { name, email, username, role },
+      update: { 
+        name, 
+        email, 
+        username, 
+        role,
+        // Ao atualizar ou criar, garantimos que o usuário está ativo
+        active: true 
+      },
       create: {
         name,
         email,
@@ -37,18 +43,19 @@ export async function upsertStaffAction(values: unknown) {
         role,
         password: defaultPassword,
         orgId: adminOrgId,
+        active: true,
       },
     });
 
     revalidatePath("/staff");
-    return { success: id ? "Funcionário atualizado!" : "Funcionário cadastrado! Senha padrão: 123456" };
+    return { success: id ? "Membro da equipe atualizado!" : "Funcionário cadastrado! Senha padrão: 123456" };
   } catch (error) {
     return { error: "E-mail ou Username já estão em uso." };
   }
 }
 
 /**
- * Atualiza os horários do funcionário usando o NOVO MODELO (Groups + Intervals)
+ * Atualiza os horários da equipe (Groups + Intervals)
  */
 export async function updateStaffScheduleAction(
   staffId: string, 
@@ -66,30 +73,25 @@ export async function updateStaffScheduleAction(
   }
 
   try {
-    // 1. Buscamos se o funcionário já tem um grupo de agenda principal
     const existingGroup = await prisma.staffScheduleGroup.findFirst({
       where: { userId: staffId, orgId }
     });
 
     if (existingGroup) {
-      // 2. Atualiza o grupo existente e seus intervalos
       await prisma.$transaction([
-        // Limpa intervalos antigos para evitar duplicidade
         prisma.staffScheduleInterval.deleteMany({ where: { groupId: existingGroup.id } }),
-        // Atualiza os dados básicos do grupo
         prisma.staffScheduleGroup.update({
           where: { id: existingGroup.id },
           data: {
             name: data.name,
             slotDuration: data.slotDuration,
             intervals: {
-              create: data.intervals // Cria os novos intervalos vindos do formulário
+              create: data.intervals 
             }
           }
         })
       ]);
     } else {
-      // 3. Se não existe, cria o primeiro grupo de agenda do funcionário
       await prisma.staffScheduleGroup.create({
         data: {
           name: data.name || "Agenda Padrão",
@@ -105,9 +107,34 @@ export async function updateStaffScheduleAction(
     }
 
     revalidatePath("/staff");
-    return { success: "Agenda da equipe atualizada com sucesso!" };
+    return { success: "Agenda da equipe atualizada!" };
   } catch (error) {
-    console.error("Erro ao salvar agenda da equipe:", error);
+    console.error("Erro ao salvar agenda:", error);
     return { error: "Erro ao salvar horários." };
+  }
+}
+
+/**
+ * Ativa/Desativa um membro da equipe (Soft Delete)
+ * Usado para bloquear acesso sem perder histórico de agendamentos
+ */
+export async function toggleStaffActiveAction(id: string, active: boolean) {
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
+  const orgId = session?.user?.orgId;
+
+  if (!isAdmin || !orgId) return { error: "Não autorizado." };
+
+  try {
+    await prisma.user.update({
+      where: { id, orgId },
+      data: { active }
+    });
+
+    revalidatePath("/staff");
+    revalidatePath("/settings/staff"); 
+    return { success: active ? "Acesso reativado!" : "Acesso desativado com sucesso!" };
+  } catch (error) {
+    return { error: "Erro ao alterar status do membro da equipe." };
   }
 }

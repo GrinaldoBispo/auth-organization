@@ -4,7 +4,7 @@ import * as z from "zod";
 
 export const appointmentSchema = z.object({
   clientName: z.string().min(3, "O nome deve ter pelo menos 3 caracteres"),
-  clientPhone: z.string().min(10, "Informe um telefone válido com DDD"),
+  clientPhone: z.string().min(10, "Informe um telefone válido").transform((val) => val.replace(/\D/g, "")), // Limpa o número automaticamente
   clientEmail: z.string().email("E-mail inválido").optional().or(z.literal("")),
   
   // Solução "Bulletproof" para o Build:

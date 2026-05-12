@@ -2,56 +2,102 @@
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { startOfDay, endOfDay } from "date-fns";
+import { LayoutDashboard, TrendingUp, Users } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { AppointmentsList } from "@/components/dashboard/appointments-list";
 import { redirect } from "next/navigation";
-import { CalendarDays, Users, CheckCircle2, Clock } from "lucide-react";
 
 export default async function DashboardPage() {
   const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const orgId = session?.user?.orgId;
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { role: true, orgId: true }
+  if (!orgId) redirect("/onboarding");
+
+  // Buscamos os agendamentos de HOJE
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      orgId,
+      date: {
+        gte: startOfDay(new Date()),
+        lte: endOfDay(new Date()),
+      },
+      status: { not: "CANCELLED" },
+    },
+    include: {
+      customer: true,
+      provider: true,
+    },
+    orderBy: {
+      date: "asc",
+    },
   });
 
-  if (dbUser?.role === "ADMIN" && !dbUser?.orgId) redirect("/onboarding");
-
-  // Busca estatísticas básicas da Org (Motor inicial)
-  const [appointmentsCount, customersCount] = await Promise.all([
-    prisma.appointment.count({ where: { orgId: dbUser?.orgId as string } }),
-    prisma.customer.count({ where: { orgId: dbUser?.orgId as string } }),
-  ]);
+  // Cálculo simples para os cards
+  const totalToday = appointments.length;
 
   return (
-    <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-black tracking-tight uppercase text-zinc-900">
-          Painel <span className="text-blue-600">{dbUser?.role}</span>
-        </h1>
-        <p className="text-zinc-500 font-medium">Bem-vindo à sua central de agendamentos.</p>
-      </div>
-
-      {/* Grid de Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="p-6 bg-white rounded-2xl border border-zinc-100 shadow-sm space-y-2">
-           <CalendarDays className="h-5 w-5 text-blue-600" />
-           <p className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Agendamentos</p>
-           <h3 className="text-3xl font-black">{appointmentsCount}</h3>
+    <div className="p-8 h-screen flex flex-col space-y-8">
+      {/* Cabeçalho Padronizado */}
+      <PageHeader 
+        title="Painel de Controle" 
+        subtitle="Confira o desempenho e os atendimentos para o dia de hoje."
+        icon={<LayoutDashboard className="h-6 w-6" />}
+      >
+        {/* Espaço para botões de ação rápida se desejar no futuro */}
+        <div className="text-[10px] font-black uppercase tracking-widest text-[#43b5a1] bg-[#43b5a1]/10 px-3 py-1 rounded-full">
+          Unidade Ativa
         </div>
-        <div className="p-6 bg-white rounded-2xl border border-zinc-100 shadow-sm space-y-2">
-           <Users className="h-5 w-5 text-emerald-600" />
-           <p className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Clientes</p>
-           <h3 className="text-3xl font-black">{customersCount}</h3>
-        </div>
-        {/* Adicione mais cards conforme necessário */}
-      </div>
+      </PageHeader>
 
-      <div className="bg-zinc-50 p-12 rounded-3xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center text-center">
-        <Clock className="h-12 w-12 text-zinc-300 mb-4" />
-        <h2 className="text-xl font-bold text-zinc-900">Nenhum agendamento para hoje</h2>
-        <p className="text-zinc-500 max-w-xs mx-auto mt-2">
-          Comece cadastrando um cliente ou criando um novo horário na agenda.
-        </p>
+      <div className="flex-1 overflow-y-auto space-y-8 pr-2">
+        {/* Grid de Estatísticas Rápidas */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <StatCard 
+            title="Atendimentos Hoje" 
+            value={totalToday} 
+            icon={<TrendingUp className="h-4 w-4 text-[#43b5a1]" />}
+            description="Total agendado para hoje"
+          />
+          <StatCard 
+            title="Clientes Ativos" 
+            value="--" // Você pode somar o total de clientes depois
+            icon={<Users className="h-4 w-4 text-blue-500" />}
+            description="Base total da organização"
+          />
+        </div>
+
+        {/* Lista de Próximos Horários */}
+        <div className="bg-white rounded-[2rem] p-8 border border-zinc-100 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-black uppercase tracking-tighter text-zinc-700">
+              Próximos Horários
+            </h2>
+            <span className="text-[10px] font-bold bg-zinc-100 text-zinc-500 px-3 py-1 rounded-lg uppercase">
+              Tempo Real
+            </span>
+          </div>
+          
+          <AppointmentsList appointments={appointments} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Subcomponente de Card de Estatística (pode mover para outro arquivo depois)
+function StatCard({ title, value, icon, description }: any) {
+  return (
+    <div className="bg-white p-6 rounded-[2rem] border border-zinc-100 shadow-sm flex flex-col justify-between">
+      <div className="flex items-start justify-between">
+        <div className="p-3 bg-zinc-50 rounded-2xl">
+          {icon}
+        </div>
+        <span className="text-2xl font-black text-zinc-800">{value}</span>
+      </div>
+      <div className="mt-4">
+        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{title}</p>
+        <p className="text-[11px] text-zinc-400 mt-1 italic">{description}</p>
       </div>
     </div>
   );

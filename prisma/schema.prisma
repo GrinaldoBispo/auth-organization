@@ -40,6 +40,7 @@ model User {
   image         String?
   password      String?
   role          UserRole  @default(STAFF)
+  active Boolean @default(true)
   
   orgId         String?
   organization  Organization? @relation(fields: [orgId], references: [id])
@@ -131,6 +132,8 @@ model Customer {
   name         String
   phone        String   
   email        String?
+  active        Boolean   @default(true)
+  anonymizedAt  DateTime? // <-- Registro para auditoria LGPD
 
   orgId        String
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
